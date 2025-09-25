@@ -67,7 +67,7 @@ function createDevice(accessToken: string): Device {
 	const client = mqtt.connect({
 		host: "13.212.83.8",
 		port: 55583,
-		username: "YqoDSaZF40KbvSQNmSZi",
+		username: accessToken,
 		protocol: "mqtt"
 	});
 
