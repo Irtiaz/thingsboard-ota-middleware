@@ -105,7 +105,7 @@ function handleClientEvents(client: MqttClient, deviceIdentifier: DeviceIdentifi
 		console.log(`${accessToken} received ${topic}: ${message.toString()}`);
 
 		// forwarding the message to chirpstack
-		const chirpstackTopic = `application/${appId}/devices/${devEUI}/command/down`;
+		const chirpstackTopic = `application/${appId}/device/${devEUI}/command/down`;
 		const chirpstackMessage = buildChirpstackMessage(message.toString(), devEUI);
 		client.publish(chirpstackTopic, chirpstackMessage, { qos: 1, retain: false }, err => {
 			if (err) {
