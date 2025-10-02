@@ -19,6 +19,16 @@ interface Device {
 
 const devices: Device[] = [];
 
+const chirpstackClient = mqtt.connect({
+  host: "13.212.83.8",
+  port: 1883,
+  protocol: "mqtt"
+});
+
+chirpstackClient.on("connect", () => {
+	console.log("Connected to chirpstack client\n");
+});
+
 app.listen(3000, () => {
 	console.log("Server started listening");
 });
@@ -107,7 +117,7 @@ function handleClientEvents(client: MqttClient, deviceIdentifier: DeviceIdentifi
 		// forwarding the message to chirpstack
 		const chirpstackTopic = `application/${appId}/device/${devEUI}/command/down`;
 		const chirpstackMessage = buildChirpstackMessage(message.toString(), devEUI);
-		client.publish(chirpstackTopic, chirpstackMessage, { qos: 1, retain: false }, err => {
+		chirpstackClient.publish(chirpstackTopic, chirpstackMessage, { qos: 1, retain: false }, err => {
 			if (err) {
 				console.error('Error publishing message:', err);
 			} else {
