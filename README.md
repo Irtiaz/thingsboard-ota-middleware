@@ -7,10 +7,12 @@ npm install
 
 To build this project run
 ```bash
-npx tsc
+npm run build
 ```
+
+Make sure you have the `CHIRPSTACK_API_KEY` in a `.env` file. You can acquire the api key from the chirpstack network server UI, from the `API Keys` section.
 
 Then run the server
 ```bash
-node dist/server.js
+npm start
 ```
