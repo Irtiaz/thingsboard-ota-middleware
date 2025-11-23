@@ -2,6 +2,12 @@ import mqtt from "mqtt";
 import express from "express";
 import type { Request } from "express";
 import type { MqttClient } from "mqtt";
+import dotenv from "dotenv";
+import grpc from "@grpc/grpc-js";
+import device_grpc from "@chirpstack/chirpstack-api/api/device_grpc_pb.js";
+import device_pb from "@chirpstack/chirpstack-api/api/device_pb.js";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
@@ -9,7 +15,6 @@ app.use(express.json());
 interface DeviceIdentifier {
 	accessToken: string,
 	devEUI: string,
-	appId: string
 }
 
 interface Device {
@@ -19,15 +24,36 @@ interface Device {
 
 const devices: Device[] = [];
 
-const chirpstackClient = mqtt.connect({
-  host: "13.212.83.8",
-  port: 1883,
-  protocol: "mqtt"
-});
+const chirpstackServer = "16.16.185.152:55555";
 
-chirpstackClient.on("connect", () => {
-	console.log("Connected to chirpstack client\n");
-});
+// The API token (can be obtained through the ChirpStack web-interface).
+const apiToken = process.env.CHIRPSTACK_API_KEY;
+
+const deviceService = new device_grpc.DeviceServiceClient(
+	chirpstackServer,
+	grpc.credentials.createInsecure(),
+);
+
+const metadata = new grpc.Metadata();
+metadata.set("authorization", "Bearer " + apiToken);
+
+function chirpstackEnqueue(devEUI: string, message: string, callback: (err: any, resp: any) => void) {
+
+	const messageBytes: Uint8Array = new TextEncoder().encode(message);
+
+	// Enqueue downlink.
+	const item = new device_pb.DeviceQueueItem();
+	item.setDevEui(devEUI);
+	item.setFPort(15);
+	item.setConfirmed(false);
+	item.setData(messageBytes);
+
+	const enqueueReq = new device_pb.EnqueueDeviceQueueItemRequest();
+	enqueueReq.setQueueItem(item);
+
+	deviceService.enqueue(enqueueReq, metadata, callback);
+}
+
 
 app.listen(3000, () => {
 	console.log("Server started listening");
@@ -43,13 +69,13 @@ app.get("/devices", (_, res) => {
 
 app.post("/add-device", (req: Request<DeviceIdentifier>, res) => {
 	const { deviceIdentifier } = req.body;
-	if (deviceIdentifier && deviceIdentifier.accessToken && deviceIdentifier.devEUI && deviceIdentifier.appId) {
+	if (deviceIdentifier && deviceIdentifier.accessToken && deviceIdentifier.devEUI ) {
 		const device = createDevice(deviceIdentifier);
 		devices.push(device);
 		res.sendStatus(201);
 	}
 	else {
-		res.status(404).send("deviceIdentifier: { accessToken, devEUI and appId } must be set");
+		res.status(404).send("deviceIdentifier: { accessToken, devEUI } must be set");
 	}
 });
 
@@ -97,10 +123,10 @@ function closeDevice(device: Device) {
 }
 
 function handleClientEvents(client: MqttClient, deviceIdentifier: DeviceIdentifier) {
-	const { accessToken, devEUI, appId } = deviceIdentifier;
+	const { accessToken, devEUI } = deviceIdentifier;
 
 	client.on("connect", () => {
-		console.log(`${accessToken} connected to MQTT broker`);
+		console.log(`${accessToken} connected to Thingsboard MQTT broker`);
 
 		client.subscribe("v1/devices/me/attributes", (err) => {
 			if (err) {
@@ -114,29 +140,21 @@ function handleClientEvents(client: MqttClient, deviceIdentifier: DeviceIdentifi
 	client.on("message", (topic, message) => {
 		console.log(`${accessToken} received ${topic}: ${message.toString()}`);
 
-		// forwarding the message to chirpstack
-		const chirpstackTopic = `application/${appId}/device/${devEUI}/command/down`;
-		const chirpstackMessage = buildChirpstackMessage(message.toString(), devEUI);
-		chirpstackClient.publish(chirpstackTopic, chirpstackMessage, { qos: 1, retain: false }, err => {
-			if (err) {
-				console.error('Error publishing message:', err);
-			} else {
-				console.log(`Message "${chirpstackMessage}" published to topic "${chirpstackTopic}"`);
+		// const chirpstackMessage = buildChirpstackMessage(message.toString(), devEUI);
+
+		chirpstackEnqueue(devEUI, message.toString(), (err, resp) => {
+			if (err !== null) {
+				console.log(err);
+				return;
 			}
+
+			console.log("Downlink has been enqueued with id: " + resp.getId());
 		});
+
 
 	});
 
 	client.on("error", (err) => console.error(`${accessToken} Connection error:${err}`));
 	client.on("close", () => console.log(`${accessToken} connection closed`));
 	client.on("reconnect", () => console.log(`${accessToken} reconnecting...`));
-}
-
-function buildChirpstackMessage(messageStr: string, devEUI: string): string {
-	return JSON.stringify({
-		dev_eui: devEUI,
-		confirmed: false,
-		fPort: 15,
-		data: btoa(messageStr)
-	});
 }
