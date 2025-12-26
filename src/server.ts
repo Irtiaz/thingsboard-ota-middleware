@@ -69,7 +69,7 @@ app.get("/devices", (_, res) => {
 
 app.post("/add-device", (req: Request<DeviceIdentifier>, res) => {
 	const { deviceIdentifier } = req.body;
-	if (deviceIdentifier && deviceIdentifier.accessToken && deviceIdentifier.devEUI ) {
+	if (deviceIdentifier && deviceIdentifier.accessToken && deviceIdentifier.devEUI) {
 		const device = createDevice(deviceIdentifier);
 		devices.push(device);
 		res.sendStatus(201);
@@ -102,12 +102,9 @@ app.delete("/delete-device", (req: Request<{ accessToken: string }>, res) => {
 	}
 });
 
-// Connection options
-
-
 function createDevice(deviceIdentifier: DeviceIdentifier): Device {
 	const client = mqtt.connect({
-		host: "13.212.83.8",
+		host: "16.16.185.152",
 		port: 55583,
 		username: deviceIdentifier.accessToken,
 		protocol: "mqtt"
