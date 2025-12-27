@@ -19,7 +19,7 @@ interface DeviceIdentifier {
 
 interface Device {
 	deviceIdentifier: DeviceIdentifier,
-	client: MqttClient
+	thingsboardClient: MqttClient
 };
 
 const devices: Device[] = [];
@@ -114,11 +114,11 @@ function createDevice(deviceIdentifier: DeviceIdentifier): Device {
 
 	handleClientEvents(thingsboardClient, deviceIdentifier);
 
-	return { deviceIdentifier, client: thingsboardClient };
+	return { deviceIdentifier, thingsboardClient };
 }
 
 function closeDevice(device: Device) {
-	device.client.end();
+	device.thingsboardClient.end();
 }
 
 function handleClientEvents(thingsboardClient: MqttClient, deviceIdentifier: DeviceIdentifier) {
@@ -201,9 +201,11 @@ chirpstackClient.on("message", (topic, message) => {
 
 		const deviceInfo = (response as any).deviceInfo;
 		const devEUI = (deviceInfo as any).devEui;
-		const accessToken = getAccessTokenFromDevEUI(devEUI);
-		if (!accessToken) return;
-		
+		const device = getDeviceFromDevEUI(devEUI);
+		if (!device) return;
+
+		const accessToken = device.deviceIdentifier.accessToken;
+
 		const base64 = (response as any).data;
 		const decodedString = Buffer.from(base64, 'base64').toString('utf-8');
 		console.log(`${accessToken} uplink`);
@@ -220,15 +222,9 @@ chirpstackClient.on("close", () => console.log(`Chirpstack Client connection clo
 chirpstackClient.on("reconnect", () => console.log(`Chirpstack Client reconnecting...`));
 
 
-function getAccessTokenFromDevEUI(devEUI: string) {
-	for (const device of devices) {
-		const { deviceIdentifier } = device;
-		if (deviceIdentifier.devEUI == devEUI) return deviceIdentifier.accessToken;
-	}
-
-	return null;
+function getDeviceFromDevEUI(devEUI: string) {
+	return devices.find(device => device.deviceIdentifier.devEUI == devEUI);
 }
-
 
 /////// Sample connection request with curl ////////
 // curl -X POST localhost:3000/add-device -H 'Content-Type: application/json' -d '{"deviceIdentifier": {"accessToken": "YqoDSaZF40KbvSQNmSZi", "devEUI": "386237673b0ffb2c"}}'
