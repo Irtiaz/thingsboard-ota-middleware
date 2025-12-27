@@ -22,10 +22,18 @@ interface Device {
 	thingsboardClient: MqttClient
 };
 
+interface UplinkFrame {
+	topic: string,
+	data: string
+}
+
 const devices: Device[] = [];
 
 const chirpstackServer = "16.16.185.152:55555";
 const thingsboardSharedAttributeTopic = "v1/devices/me/attributes";
+const thingsboardRPCTopic = "v1/devices/me/rpc/request/+";
+const downlinkFport = 15;
+const uplinkFport = 105;
 
 
 // The API token (can be obtained through the ChirpStack web-interface).
@@ -46,7 +54,7 @@ function chirpstackEnqueue(devEUI: string, message: string, callback: (err: any,
 	// Enqueue downlink.
 	const item = new device_pb.DeviceQueueItem();
 	item.setDevEui(devEUI);
-	item.setFPort(15);
+	item.setFPort(downlinkFport);
 	item.setConfirmed(false);
 	item.setData(messageBytes);
 
@@ -138,6 +146,15 @@ function handleClientEvents(thingsboardClient: MqttClient, deviceIdentifier: Dev
 			}
 		});
 
+		thingsboardClient.subscribe(thingsboardRPCTopic, (err) => {
+			if (err) {
+				console.error(`${accessToken} faced error trying to subscribe to ${thingsboardRPCTopic}`);
+				console.error(`${accessToken} subscribe to thingsboard rpc error: `, err);
+			} else {
+				console.log(`${accessToken} subscribed to ${thingsboardRPCTopic}`);
+			}
+		});
+
 		chirpstackClient.subscribe(chirpstackUplinkTopic, (err) => {
 			if (err) {
 				console.error(`${accessToken} faced error trying to subscribe to ${chirpstackUplinkTopic}`);
@@ -153,10 +170,10 @@ function handleClientEvents(thingsboardClient: MqttClient, deviceIdentifier: Dev
 	thingsboardClient.on("message", (topic, message) => {
 		console.log(`${accessToken} received topic ${topic}`);
 
-		if (topic == thingsboardSharedAttributeTopic) {
+		if (topic == thingsboardSharedAttributeTopic || topic.startsWith("v1/devices/me/rpc/request")) {
 			console.log(`${accessToken} received message ${message}`)
 			const jsonData = {
-				topic: thingsboardSharedAttributeTopic,
+				topic: topic,
 				data: JSON.parse(message.toString())
 			};
 			chirpstackEnqueue(devEUI, JSON.stringify(jsonData), (err, resp) => {
@@ -203,6 +220,11 @@ chirpstackClient.on("message", (topic, message) => {
 	if (topic.startsWith("application") && topic.endsWith("up")) {
 		const response = JSON.parse(message.toString());
 
+		if (response.fPort != uplinkFport) {
+			console.log(`Skipping fPort ${response.fPort}`);
+			return;
+		}
+
 		const deviceInfo = (response as any).deviceInfo;
 		const devEUI = (deviceInfo as any).devEui;
 		const device = getDeviceFromDevEUI(devEUI);
@@ -214,6 +236,17 @@ chirpstackClient.on("message", (topic, message) => {
 		const decodedString = Buffer.from(base64, 'base64').toString('utf-8');
 		console.log(`${accessToken} uplink`);
 		console.log(decodedString);
+
+		const json: UplinkFrame = JSON.parse(decodedString);
+		console.log(json);
+		const { topic, data } = json;
+
+		device.thingsboardClient.publish(topic, data, (err) => {
+			if (err) console.error(`${accessToken} Publish error: ${err}`);
+			else {
+				console.log(`${accessToken} successfully published ${data} to ${topic}`);
+			}
+		});
 	}
 
 	else {
