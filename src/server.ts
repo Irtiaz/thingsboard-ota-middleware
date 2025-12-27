@@ -155,7 +155,11 @@ function handleClientEvents(thingsboardClient: MqttClient, deviceIdentifier: Dev
 
 		if (topic == thingsboardSharedAttributeTopic) {
 			console.log(`${accessToken} received message ${message}`)
-			chirpstackEnqueue(devEUI, message.toString(), (err, resp) => {
+			const jsonData = {
+				topic: thingsboardSharedAttributeTopic,
+				data: JSON.parse(message.toString())
+			};
+			chirpstackEnqueue(devEUI, JSON.stringify(jsonData), (err, resp) => {
 				if (err !== null) {
 					console.log(err);
 					return;
