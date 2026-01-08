@@ -4,8 +4,8 @@
     "description": "",
     "main": "index.js",
     "scripts": {
-				"build": "npx tsc",
-				"start": "node dist/server.js"
+        "build": "npx tsc",
+        "start": "node dist/server.js"
     },
     "keywords": [],
     "author": "",
@@ -21,6 +21,7 @@
         "@types/express": "^5.0.3",
         "dotenv": "^17.2.3",
         "express": "^5.1.0",
-        "mqtt": "^5.14.1"
+        "mqtt": "^5.14.1",
+        "zod": "^4.3.5"
     }
 }
